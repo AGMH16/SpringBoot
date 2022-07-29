@@ -1,0 +1,3 @@
+#
+#Fri Jul 29 05:16:37 CST 2022
+examen.demo.DemoApplication=org.springframework.stereotype.Component,org.springframework.boot.SpringBootConfiguration
