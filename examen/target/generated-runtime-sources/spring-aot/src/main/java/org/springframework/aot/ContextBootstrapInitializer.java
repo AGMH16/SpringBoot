@@ -420,10 +420,10 @@ public class ContextBootstrapInitializer implements ApplicationContextInitialize
     org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerServletSessionConfiguration_cookieSerializer(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.session.SessionAutoConfiguration", SessionAutoConfiguration.class)
         .instanceSupplier(SessionAutoConfiguration::new).register(beanFactory);
-    BeanDefinitionRegistrar.of("spring.webflux-org.springframework.boot.autoconfigure.web.reactive.WebFluxProperties", WebFluxProperties.class)
-        .instanceSupplier(WebFluxProperties::new).register(beanFactory);
     BeanDefinitionRegistrar.of("spring.session-org.springframework.boot.autoconfigure.session.SessionProperties", SessionProperties.class)
         .instanceSupplier(SessionProperties::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("spring.webflux-org.springframework.boot.autoconfigure.web.reactive.WebFluxProperties", WebFluxProperties.class)
+        .instanceSupplier(WebFluxProperties::new).register(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration", TaskExecutionAutoConfiguration.class)
         .instanceSupplier(TaskExecutionAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("taskExecutorBuilder", TaskExecutorBuilder.class).withFactoryMethod(TaskExecutionAutoConfiguration.class, "taskExecutorBuilder", TaskExecutionProperties.class, ObjectProvider.class, ObjectProvider.class)

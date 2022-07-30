@@ -4,11 +4,11 @@
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [
-    "org.springframework.context.annotation.Bean",
+    "org.springframework.boot.autoconfigure.AutoConfigureAfter",
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [
-    "org.springframework.boot.autoconfigure.AutoConfigureAfter",
+    "org.springframework.context.annotation.Bean",
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [

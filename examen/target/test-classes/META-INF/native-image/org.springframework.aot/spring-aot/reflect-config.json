@@ -713,12 +713,6 @@
   },
   {
     "name": "javax.persistence.Column",
-    "allPublicConstructors": true,
-    "allPublicMethods": true
-  },
-  {
-    "name": "javax.persistence.Entity",
-    "allPublicConstructors": true,
     "allPublicMethods": true
   },
   {
@@ -740,7 +734,6 @@
   },
   {
     "name": "javax.persistence.Id",
-    "allPublicConstructors": true,
     "allPublicMethods": true
   },
   {
@@ -749,12 +742,10 @@
   },
   {
     "name": "javax.persistence.JoinColumn",
-    "allPublicConstructors": true,
     "allPublicMethods": true
   },
   {
     "name": "javax.persistence.ManyToOne",
-    "allPublicConstructors": true,
     "allPublicMethods": true
   },
   {
@@ -766,7 +757,6 @@
   },
   {
     "name": "javax.persistence.OneToMany",
-    "allPublicConstructors": true,
     "allPublicMethods": true
   },
   {
@@ -779,7 +769,6 @@
   },
   {
     "name": "javax.persistence.Table",
-    "allPublicConstructors": true,
     "allPublicMethods": true
   },
   {

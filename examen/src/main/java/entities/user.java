@@ -3,7 +3,10 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package entities;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.google.common.hash.Hashing;
+import java.nio.charset.StandardCharsets;
 import javax.persistence.*;
 import java.util.List;
 
@@ -51,8 +54,12 @@ public class user {
         this.nombreUsuario = nombreUsuario;
     }
 
+    public String getSHA256(String data) {
+        return Hashing.sha256().hashString(data, StandardCharsets.UTF_8).toString();
+    }
+
     public String getContrasena() {
-        return contrasena;
+        return getSHA256(contrasena);
     }
 
     public void setContrasena(String contrasena) {

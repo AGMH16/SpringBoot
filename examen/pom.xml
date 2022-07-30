@@ -140,6 +140,12 @@
             <version>2.7.2</version>
             <type>jar</type>
         </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>28.2-android</version>
+            <type>jar</type>
+        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>

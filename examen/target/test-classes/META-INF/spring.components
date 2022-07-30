@@ -1,5 +1,5 @@
 #
-#Fri Jul 29 23:24:27 CST 2022
+#Fri Jul 29 23:50:27 CST 2022
 utils.roleUtils=org.springframework.stereotype.Component
 repository.roleRepository=org.springframework.stereotype.Component,org.springframework.data.repository.Repository
 entities.role=javax.persistence.Entity,javax.persistence.Table
