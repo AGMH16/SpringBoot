@@ -25,6 +25,18 @@ public final class ContextBootstrapInitializer {
         .instanceSupplier(SessionAutoConfiguration.ServletSessionConfiguration.ServletSessionRepositoryConfiguration::new).register(beanFactory);
   }
 
+  public static void registerServletSessionConfiguration_RememberMeServicesConfiguration(
+      DefaultListableBeanFactory beanFactory) {
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.session.SessionAutoConfiguration$ServletSessionConfiguration$RememberMeServicesConfiguration", SessionAutoConfiguration.ServletSessionConfiguration.RememberMeServicesConfiguration.class)
+        .instanceSupplier(SessionAutoConfiguration.ServletSessionConfiguration.RememberMeServicesConfiguration::new).register(beanFactory);
+  }
+
+  public static void registerRememberMeServicesConfiguration_rememberMeServicesCookieSerializerCustomizer(
+      DefaultListableBeanFactory beanFactory) {
+    BeanDefinitionRegistrar.of("rememberMeServicesCookieSerializerCustomizer", DefaultCookieSerializerCustomizer.class).withFactoryMethod(SessionAutoConfiguration.ServletSessionConfiguration.RememberMeServicesConfiguration.class, "rememberMeServicesCookieSerializerCustomizer")
+        .instanceSupplier(() -> beanFactory.getBean(SessionAutoConfiguration.ServletSessionConfiguration.RememberMeServicesConfiguration.class).rememberMeServicesCookieSerializerCustomizer()).register(beanFactory);
+  }
+
   public static void registerSessionAutoConfiguration_ServletSessionRepositoryValidator(
       DefaultListableBeanFactory beanFactory) {
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.session.SessionAutoConfiguration$ServletSessionRepositoryValidator", SessionAutoConfiguration.ServletSessionRepositoryValidator.class).withConstructor(SessionProperties.class, ObjectProvider.class)

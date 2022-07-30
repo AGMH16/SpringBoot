@@ -50,10 +50,19 @@
         "pattern": "banner.txt"
       },
       {
+        "pattern": "data.sql"
+      },
+      {
         "pattern": "db/.*"
       },
       {
+        "pattern": "hibernate.properties"
+      },
+      {
         "pattern": "logging.properties"
+      },
+      {
+        "pattern": "mariadb.properties"
       },
       {
         "pattern": "messages/.*"
@@ -62,7 +71,19 @@
         "pattern": "org/apache/catalina/startup/MimeTypeMappings.properties"
       },
       {
+        "pattern": "org/hibernate/.*.dtd"
+      },
+      {
+        "pattern": "org/hibernate/.*.xsd"
+      },
+      {
         "pattern": "org/springframework/boot/autoconfigure/data/rest/SpringBootRepositoryRestConfigurer.class"
+      },
+      {
+        "pattern": "org/springframework/boot/autoconfigure/security/servlet/SpringBootWebSecurityConfiguration\\$WebSecurityEnablerConfiguration.class"
+      },
+      {
+        "pattern": "org/springframework/boot/autoconfigure/transaction/TransactionAutoConfiguration\\$EnableTransactionManagementConfiguration\\$JdkDynamicAutoProxyConfiguration.class"
       },
       {
         "pattern": "org/springframework/boot/logging/.*.properties"
@@ -98,13 +119,25 @@
         "pattern": "org/springframework/web/util/HtmlCharacterEntityReferences.properties"
       },
       {
+        "pattern": "schema.sql"
+      },
+      {
         "pattern": "spring.properties"
+      },
+      {
+        "pattern": "system.properties"
       }
     ]
   },
   "bundles": [
     {
+      "name": "org.aspectj.weaver.weaver-messages"
+    },
+    {
       "name": "org.hibernate.validator.ValidationMessages"
+    },
+    {
+      "name": "org.springframework.security.messages"
     }
   ]
 }

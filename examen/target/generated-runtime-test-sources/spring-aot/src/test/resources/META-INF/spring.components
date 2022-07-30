@@ -1,3 +1,12 @@
 #
-#Fri Jul 29 05:15:59 CST 2022
+#Fri Jul 29 23:24:27 CST 2022
+utils.roleUtils=org.springframework.stereotype.Component
+repository.roleRepository=org.springframework.stereotype.Component,org.springframework.data.repository.Repository
+entities.role=javax.persistence.Entity,javax.persistence.Table
+repository.userRepository=org.springframework.stereotype.Component,org.springframework.data.repository.Repository
+service.roleService=org.springframework.stereotype.Component
+utils.userUtils=org.springframework.stereotype.Component
+service.userService=org.springframework.stereotype.Component
 examen.demo.DemoApplication=org.springframework.stereotype.Component,org.springframework.boot.SpringBootConfiguration
+entities.user=javax.persistence.Entity,javax.persistence.Table
+controller.userController=org.springframework.stereotype.Component

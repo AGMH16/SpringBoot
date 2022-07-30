@@ -4,7 +4,7 @@
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [
-    "org.springframework.boot.autoconfigure.AutoConfigureBefore",
+    "org.springframework.boot.autoconfigure.AutoConfigureAfter",
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [
@@ -12,7 +12,7 @@
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [
-    "org.springframework.boot.autoconfigure.AutoConfigureAfter",
+    "org.springframework.boot.autoconfigure.AutoConfigureBefore",
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [
@@ -64,6 +64,19 @@
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [
+    "org.springframework.security.config.annotation.authentication.configuration.EnableGlobalAuthentication",
+    "org.springframework.core.annotation.SynthesizedAnnotation"
+  ],
+  [
+    "org.hibernate.query.spi.QueryImplementor"
+  ],
+  [
+    "org.springframework.data.domain.AuditorAware",
+    "org.springframework.aop.SpringProxy",
+    "org.springframework.aop.framework.Advised",
+    "org.springframework.core.DecoratingProxy"
+  ],
+  [
     "org.springframework.data.rest.webmvc.RepositoryRestController",
     "org.springframework.data.rest.webmvc.BasePathAwareController",
     "org.springframework.core.annotation.SynthesizedAnnotation"
@@ -92,20 +105,34 @@
   ],
   [
     "org.springframework.hateoas.server.core.LastInvocationAware",
+    "java.util.List",
+    "java.util.Collection",
+    "org.springframework.aop.SpringProxy",
+    "org.springframework.aop.framework.Advised",
+    "org.springframework.core.DecoratingProxy"
+  ],
+  [
+    "org.springframework.hateoas.server.core.LastInvocationAware",
     "org.springframework.web.servlet.View",
     "org.springframework.aop.SpringProxy",
     "org.springframework.aop.framework.Advised",
     "org.springframework.core.DecoratingProxy"
   ],
   [
-    "javax.validation.Validator",
-    "org.springframework.aop.SpringProxy",
-    "org.springframework.aop.framework.Advised",
-    "org.springframework.core.DecoratingProxy"
+    "org.hibernate.Session",
+    "org.springframework.orm.jpa.EntityManagerProxy"
   ],
   [
-    "org.springframework.data.annotation.QueryAnnotation",
-    "org.springframework.core.annotation.SynthesizedAnnotation"
+    "org.hibernate.SessionFactory",
+    "org.springframework.orm.jpa.EntityManagerFactoryInfo"
+  ],
+  [
+    "org.hibernate.jpa.HibernateEntityManagerFactory",
+    "org.springframework.orm.jpa.EntityManagerFactoryInfo"
+  ],
+  [
+    "org.hibernate.query.Query",
+    "org.hibernate.query.spi.QueryImplementor"
   ],
   [
     "org.springframework.context.annotation.Import",
@@ -181,6 +208,22 @@
   ],
   [
     "org.springframework.transaction.event.TransactionalEventListener",
+    "org.springframework.core.annotation.SynthesizedAnnotation"
+  ],
+  [
+    "org.springframework.data.jpa.repository.support.CrudMethodMetadata",
+    "org.springframework.aop.SpringProxy",
+    "org.springframework.aop.framework.Advised",
+    "org.springframework.core.DecoratingProxy"
+  ],
+  [
+    "javax.validation.Validator",
+    "org.springframework.aop.SpringProxy",
+    "org.springframework.aop.framework.Advised",
+    "org.springframework.core.DecoratingProxy"
+  ],
+  [
+    "org.springframework.data.annotation.QueryAnnotation",
     "org.springframework.core.annotation.SynthesizedAnnotation"
   ],
   [

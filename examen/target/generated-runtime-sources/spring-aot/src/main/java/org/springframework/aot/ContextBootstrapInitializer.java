@@ -1,7 +1,10 @@
 package org.springframework.aot;
 
+import com.vaadin.flow.server.auth.AccessAnnotationChecker;
+import com.vaadin.flow.server.auth.ViewAccessChecker;
 import com.vaadin.flow.server.startup.ApplicationConfigurationFactory;
 import com.vaadin.flow.spring.SpringBootAutoConfiguration;
+import com.vaadin.flow.spring.SpringSecurityAutoConfiguration;
 import com.vaadin.flow.spring.SpringServlet;
 import com.vaadin.flow.spring.VaadinApplicationConfiguration;
 import com.vaadin.flow.spring.VaadinConfigurationProperties;
@@ -10,15 +13,28 @@ import com.vaadin.flow.spring.VaadinServletConfiguration;
 import examen.demo.DemoApplication;
 import java.lang.Object;
 import java.lang.Override;
+import java.lang.String;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.servlet.Filter;
 import javax.servlet.MultipartConfigElement;
 import javax.validation.Validator;
+import org.springframework.aop.aspectj.annotation.AnnotationAwareAspectJAutoProxyCreator;
 import org.springframework.aot.beans.factory.BeanDefinitionRegistrar;
+import org.springframework.aot.context.annotation.ImportAwareBeanPostProcessor;
+import org.springframework.aot.context.annotation.InitDestroyBeanPostProcessor;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.LazyInitializationExcludeFilter;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
@@ -29,6 +45,8 @@ import org.springframework.boot.autoconfigure.context.LifecycleAutoConfiguration
 import org.springframework.boot.autoconfigure.context.LifecycleProperties;
 import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
 import org.springframework.boot.autoconfigure.dao.PersistenceExceptionTranslationAutoConfiguration;
+import org.springframework.boot.autoconfigure.data.jdbc.JdbcRepositoriesAutoConfiguration;
+import org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration;
 import org.springframework.boot.autoconfigure.data.rest.RepositoryRestMvcAutoConfiguration;
 import org.springframework.boot.autoconfigure.data.rest.RepositoryRestProperties;
 import org.springframework.boot.autoconfigure.freemarker.FreeMarkerAutoConfiguration;
@@ -42,8 +60,23 @@ import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.autoconfigure.info.ProjectInfoProperties;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.autoconfigure.jackson.JacksonProperties;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.JdbcProperties;
+import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.metadata.DataSourcePoolMetadataProvidersConfiguration;
 import org.springframework.boot.autoconfigure.netty.NettyAutoConfiguration;
 import org.springframework.boot.autoconfigure.netty.NettyProperties;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateProperties;
+import org.springframework.boot.autoconfigure.orm.jpa.JpaBaseConfiguration;
+import org.springframework.boot.autoconfigure.orm.jpa.JpaProperties;
+import org.springframework.boot.autoconfigure.security.SecurityProperties;
+import org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
 import org.springframework.boot.autoconfigure.session.SessionAutoConfiguration;
 import org.springframework.boot.autoconfigure.session.SessionProperties;
 import org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration;
@@ -57,6 +90,7 @@ import org.springframework.boot.autoconfigure.thymeleaf.ThymeleafProperties;
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.autoconfigure.transaction.TransactionManagerCustomizers;
 import org.springframework.boot.autoconfigure.transaction.TransactionProperties;
+import org.springframework.boot.autoconfigure.transaction.jta.JtaAutoConfiguration;
 import org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.autoconfigure.web.WebProperties;
@@ -90,6 +124,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.ConfigurationPropertiesBindingPostProcessor;
 import org.springframework.boot.jackson.JsonComponentModule;
 import org.springframework.boot.jackson.JsonMixinModule;
+import org.springframework.boot.orm.jpa.EntityManagerFactoryBuilder;
 import org.springframework.boot.task.TaskExecutorBuilder;
 import org.springframework.boot.task.TaskSchedulerBuilder;
 import org.springframework.boot.validation.beanvalidation.MethodValidationExcludeFilter;
@@ -97,6 +132,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.boot.web.reactive.function.client.WebClientCustomizer;
 import org.springframework.boot.web.server.ErrorPageRegistrarBeanPostProcessor;
 import org.springframework.boot.web.server.WebServerFactoryCustomizerBeanPostProcessor;
+import org.springframework.boot.web.servlet.DelegatingFilterProxyRegistrationBean;
 import org.springframework.boot.web.servlet.ServletContextInitializer;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.boot.web.servlet.error.DefaultErrorAttributes;
@@ -106,6 +142,7 @@ import org.springframework.boot.webservices.client.WebServiceTemplateBuilder;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.ContextAnnotationAutowireCandidateResolver;
 import org.springframework.context.support.DefaultLifecycleProcessor;
 import org.springframework.context.support.GenericApplicationContext;
@@ -115,7 +152,19 @@ import org.springframework.core.env.Environment;
 import org.springframework.dao.annotation.PersistenceExceptionTranslationPostProcessor;
 import org.springframework.data.auditing.AuditableBeanWrapperFactory;
 import org.springframework.data.geo.GeoModule;
+import org.springframework.data.jdbc.core.JdbcAggregateTemplate;
+import org.springframework.data.jdbc.core.convert.DataAccessStrategy;
+import org.springframework.data.jdbc.core.convert.JdbcConverter;
+import org.springframework.data.jdbc.core.convert.JdbcCustomConversions;
+import org.springframework.data.jdbc.core.convert.RelationResolver;
+import org.springframework.data.jdbc.core.mapping.JdbcMappingContext;
+import org.springframework.data.jdbc.repository.config.AbstractJdbcConfiguration;
+import org.springframework.data.jpa.repository.config.JpaMetamodelMappingContextFactoryBean;
+import org.springframework.data.jpa.repository.support.DefaultJpaContext;
+import org.springframework.data.jpa.repository.support.EntityManagerBeanDefinitionRegistrarPostProcessor;
+import org.springframework.data.jpa.repository.support.JpaEvaluationContextExtension;
 import org.springframework.data.mapping.context.PersistentEntities;
+import org.springframework.data.relational.core.dialect.Dialect;
 import org.springframework.data.repository.support.Repositories;
 import org.springframework.data.repository.support.RepositoryInvokerFactory;
 import org.springframework.data.rest.core.config.MetadataConfiguration;
@@ -163,10 +212,35 @@ import org.springframework.hateoas.server.LinkRelationProvider;
 import org.springframework.hateoas.server.mvc.TypeConstrainedMappingJackson2HttpMessageConverter;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ClientHttpConnector;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
+import org.springframework.orm.jpa.JpaVendorAdapter;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.SharedEntityManagerCreator;
+import org.springframework.orm.jpa.support.PersistenceAnnotationBeanPostProcessor;
 import org.springframework.plugin.core.OrderAwarePluginRegistry;
 import org.springframework.plugin.core.PluginRegistry;
 import org.springframework.plugin.core.support.PluginRegistryFactoryBean;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.security.access.expression.SecurityExpressionHandler;
+import org.springframework.security.authentication.DefaultAuthenticationEventPublisher;
+import org.springframework.security.config.annotation.ObjectPostProcessor;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.authentication.configuration.GlobalAuthenticationConfigurerAdapter;
+import org.springframework.security.config.annotation.configuration.ObjectPostProcessorConfiguration;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration;
+import org.springframework.security.context.DelegatingApplicationListener;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.FilterInvocation;
+import org.springframework.security.web.access.WebInvocationPrivilegeEvaluator;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AbstractTransactionManagementConfiguration;
+import org.springframework.transaction.annotation.ProxyTransactionManagementConfiguration;
+import org.springframework.transaction.event.TransactionalEventListenerFactory;
+import org.springframework.transaction.interceptor.BeanFactoryTransactionAttributeSourceAdvisor;
+import org.springframework.transaction.interceptor.TransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.PathMatcher;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
@@ -211,12 +285,31 @@ import org.springframework.ws.soap.server.endpoint.mapping.SoapActionAnnotationM
 import org.springframework.ws.transport.http.MessageDispatcherServlet;
 
 public class ContextBootstrapInitializer implements ApplicationContextInitializer<GenericApplicationContext> {
+  private ImportAwareBeanPostProcessor createImportAwareBeanPostProcessor() {
+    Map<String, String> mappings = new LinkedHashMap<>();
+    mappings.put("org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration", "org.springframework.boot.autoconfigure.security.servlet.SpringBootWebSecurityConfiguration$WebSecurityEnablerConfiguration");
+    mappings.put("org.springframework.transaction.annotation.ProxyTransactionManagementConfiguration", "org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration$EnableTransactionManagementConfiguration$JdkDynamicAutoProxyConfiguration");
+    return new ImportAwareBeanPostProcessor(mappings);
+  }
+
+  private InitDestroyBeanPostProcessor createInitDestroyBeanPostProcessor(
+      ConfigurableBeanFactory beanFactory) {
+    Map<String, List<String>> initMethods = new LinkedHashMap<>();
+    initMethods.put("requestUtil", List.of("init"));
+    Map<String, List<String>> destroyMethods = new LinkedHashMap<>();
+    return new InitDestroyBeanPostProcessor(beanFactory, initMethods, destroyMethods);
+  }
+
   @Override
   public void initialize(GenericApplicationContext context) {
     // infrastructure
     DefaultListableBeanFactory beanFactory = context.getDefaultListableBeanFactory();
     beanFactory.setAutowireCandidateResolver(new ContextAnnotationAutowireCandidateResolver());
+    beanFactory.addBeanPostProcessor(createImportAwareBeanPostProcessor());
+    beanFactory.addBeanPostProcessor(createInitDestroyBeanPostProcessor(beanFactory));
 
+    BeanDefinitionRegistrar.of("org.springframework.context.annotation.internalPersistenceAnnotationProcessor", PersistenceAnnotationBeanPostProcessor.class)
+        .instanceSupplier(PersistenceAnnotationBeanPostProcessor::new).customize((bd) -> bd.setRole(2)).register(beanFactory);
     BeanDefinitionRegistrar.of("examen.demo.DemoApplication", DemoApplication.class)
         .instanceSupplier(DemoApplication::new).register(beanFactory);
     org.springframework.boot.autoconfigure.ContextBootstrapInitializer.registerAutoConfigurationPackages_BasePackages(beanFactory);
@@ -291,11 +384,37 @@ public class ContextBootstrapInitializer implements ApplicationContextInitialize
     }).register(beanFactory);
     BeanDefinitionRegistrar.of("methodValidationPostProcessor", MethodValidationPostProcessor.class).withFactoryMethod(ValidationAutoConfiguration.class, "methodValidationPostProcessor", Environment.class, Validator.class, ObjectProvider.class)
         .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> ValidationAutoConfiguration.methodValidationPostProcessor(attributes.get(0), attributes.get(1), attributes.get(2)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.transaction.jta.JtaAutoConfiguration", JtaAutoConfiguration.class)
+        .instanceSupplier(JtaAutoConfiguration::new).register(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerDataSourceConfiguration_Hikari(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerHikari_dataSource(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerDataSourceJmxConfiguration_Hikari(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerDataSourceJmxConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerDataSourceAutoConfiguration_PooledDataSourceConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.metadata.ContextBootstrapInitializer.registerDataSourcePoolMetadataProvidersConfiguration_HikariPoolDataSourceMetadataProviderConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.metadata.ContextBootstrapInitializer.registerHikariPoolDataSourceMetadataProviderConfiguration_hikariPoolDataSourceMetadataProvider(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.jdbc.metadata.DataSourcePoolMetadataProvidersConfiguration", DataSourcePoolMetadataProvidersConfiguration.class)
+        .instanceSupplier(DataSourcePoolMetadataProvidersConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration", DataSourceAutoConfiguration.class)
+        .instanceSupplier(DataSourceAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("spring.datasource-org.springframework.boot.autoconfigure.jdbc.DataSourceProperties", DataSourceProperties.class)
+        .instanceSupplier(DataSourceProperties::new).register(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerJdbcTemplateConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerJdbcTemplateConfiguration_jdbcTemplate(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerNamedParameterJdbcTemplateConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerNamedParameterJdbcTemplateConfiguration_namedParameterJdbcTemplate(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration", JdbcTemplateAutoConfiguration.class)
+        .instanceSupplier(JdbcTemplateAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("spring.jdbc-org.springframework.boot.autoconfigure.jdbc.JdbcProperties", JdbcProperties.class)
+        .instanceSupplier(JdbcProperties::new).register(beanFactory);
+    org.springframework.boot.sql.init.dependency.ContextBootstrapInitializer.registerDatabaseInitializationDependencyConfigurer_DependsOnDatabaseInitializationPostProcessor(beanFactory);
     org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerSessionAutoConfiguration_ServletSessionRepositoryImplementationValidator(beanFactory);
     BeanDefinitionRegistrar.of("java.lang.Object", Object.class)
         .instanceSupplier(Object::new).register(beanFactory);
     org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerNoOpSessionConfiguration(beanFactory);
     org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerServletSessionConfiguration_ServletSessionRepositoryConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerServletSessionConfiguration_RememberMeServicesConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerRememberMeServicesConfiguration_rememberMeServicesCookieSerializerCustomizer(beanFactory);
     org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerSessionAutoConfiguration_ServletSessionRepositoryValidator(beanFactory);
     org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerSessionAutoConfiguration_ServletSessionConfiguration(beanFactory);
     org.springframework.boot.autoconfigure.session.ContextBootstrapInitializer.registerServletSessionConfiguration_cookieSerializer(beanFactory);
@@ -412,6 +531,15 @@ public class ContextBootstrapInitializer implements ApplicationContextInitialize
         .instanceSupplier(WebMvcAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("formContentFilter", OrderedFormContentFilter.class).withFactoryMethod(WebMvcAutoConfiguration.class, "formContentFilter")
         .instanceSupplier(() -> beanFactory.getBean(WebMvcAutoConfiguration.class).formContentFilter()).register(beanFactory);
+    BeanDefinitionRegistrar.of("com.vaadin.flow.spring.SpringSecurityAutoConfiguration", SpringSecurityAutoConfiguration.class)
+        .instanceSupplier(SpringSecurityAutoConfiguration::new).register(beanFactory);
+    com.vaadin.flow.spring.security.ContextBootstrapInitializer.registerSpringSecurityAutoConfiguration_vaadinDefaultRequestCache(beanFactory);
+    com.vaadin.flow.spring.security.ContextBootstrapInitializer.registerSpringSecurityAutoConfiguration_viewAccessCheckerInitializer(beanFactory);
+    BeanDefinitionRegistrar.of("viewAccessChecker", ViewAccessChecker.class).withFactoryMethod(SpringSecurityAutoConfiguration.class, "viewAccessChecker", AccessAnnotationChecker.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(SpringSecurityAutoConfiguration.class).viewAccessChecker(attributes.get(0)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("accessAnnotationChecker", AccessAnnotationChecker.class).withFactoryMethod(SpringSecurityAutoConfiguration.class, "accessAnnotationChecker")
+        .instanceSupplier(() -> beanFactory.getBean(SpringSecurityAutoConfiguration.class).accessAnnotationChecker()).register(beanFactory);
+    com.vaadin.flow.spring.security.ContextBootstrapInitializer.registerSpringSecurityAutoConfiguration_requestUtil(beanFactory);
     BeanDefinitionRegistrar.of("com.vaadin.flow.spring.VaadinScopesConfig", VaadinScopesConfig.class)
         .instanceSupplier(VaadinScopesConfig::new).register(beanFactory);
     BeanDefinitionRegistrar.of("vaadinSessionScope", BeanFactoryPostProcessor.class).withFactoryMethod(VaadinScopesConfig.class, "vaadinSessionScope")
@@ -420,12 +548,40 @@ public class ContextBootstrapInitializer implements ApplicationContextInitialize
         .instanceSupplier(() -> VaadinScopesConfig.vaadinUIScope()).register(beanFactory);
     BeanDefinitionRegistrar.of("vaadinRouteScope", BeanFactoryPostProcessor.class).withFactoryMethod(VaadinScopesConfig.class, "vaadinRouteScope")
         .instanceSupplier(() -> VaadinScopesConfig.vaadinRouteScope()).register(beanFactory);
+    org.springframework.boot.autoconfigure.aop.ContextBootstrapInitializer.registerAspectJAutoProxyingConfiguration_JdkDynamicAutoProxyConfiguration(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.aop.config.internalAutoProxyCreator", AnnotationAwareAspectJAutoProxyCreator.class)
+        .instanceSupplier(AnnotationAwareAspectJAutoProxyCreator::new).customize((bd) -> {
+      bd.setRole(2);
+      bd.getPropertyValues().addPropertyValue("order", -2147483648);
+    }).register(beanFactory);
+    org.springframework.boot.autoconfigure.aop.ContextBootstrapInitializer.registerAopAutoConfiguration_AspectJAutoProxyingConfiguration(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.aop.AopAutoConfiguration", AopAutoConfiguration.class)
         .instanceSupplier(AopAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.availability.ApplicationAvailabilityAutoConfiguration", ApplicationAvailabilityAutoConfiguration.class)
         .instanceSupplier(ApplicationAvailabilityAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("applicationAvailability", ApplicationAvailabilityBean.class).withFactoryMethod(ApplicationAvailabilityAutoConfiguration.class, "applicationAvailability")
         .instanceSupplier(() -> beanFactory.getBean(ApplicationAvailabilityAutoConfiguration.class).applicationAvailability()).register(beanFactory);
+    org.springframework.boot.autoconfigure.orm.jpa.ContextBootstrapInitializer.registerJpaBaseConfiguration_JpaWebConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.orm.jpa.ContextBootstrapInitializer.registerJpaWebConfiguration_openEntityManagerInViewInterceptor(beanFactory);
+    org.springframework.boot.autoconfigure.orm.jpa.ContextBootstrapInitializer.registerJpaWebConfiguration_openEntityManagerInViewInterceptorConfigurer(beanFactory);
+    org.springframework.boot.autoconfigure.orm.jpa.ContextBootstrapInitializer.registerHibernateJpaConfiguration(beanFactory);
+    BeanDefinitionRegistrar.of("transactionManager", PlatformTransactionManager.class).withFactoryMethod(JpaBaseConfiguration.class, "transactionManager", ObjectProvider.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(JpaBaseConfiguration.class).transactionManager(attributes.get(0)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("jpaVendorAdapter", JpaVendorAdapter.class).withFactoryMethod(JpaBaseConfiguration.class, "jpaVendorAdapter")
+        .instanceSupplier(() -> beanFactory.getBean(JpaBaseConfiguration.class).jpaVendorAdapter()).register(beanFactory);
+    BeanDefinitionRegistrar.of("entityManagerFactoryBuilder", EntityManagerFactoryBuilder.class).withFactoryMethod(JpaBaseConfiguration.class, "entityManagerFactoryBuilder", JpaVendorAdapter.class, ObjectProvider.class, ObjectProvider.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(JpaBaseConfiguration.class).entityManagerFactoryBuilder(attributes.get(0), attributes.get(1), attributes.get(2)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("entityManagerFactory", LocalContainerEntityManagerFactoryBean.class).withFactoryMethod(JpaBaseConfiguration.class, "entityManagerFactory", EntityManagerFactoryBuilder.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(JpaBaseConfiguration.class).entityManagerFactory(attributes.get(0)))).customize((bd) -> {
+      bd.setPrimary(true);
+      bd.setDependsOn(new String[] { "dataSourceScriptDatabaseInitializer" });
+    }).register(beanFactory);
+    BeanDefinitionRegistrar.of("spring.jpa.hibernate-org.springframework.boot.autoconfigure.orm.jpa.HibernateProperties", HibernateProperties.class)
+        .instanceSupplier(HibernateProperties::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("spring.jpa-org.springframework.boot.autoconfigure.orm.jpa.JpaProperties", JpaProperties.class)
+        .instanceSupplier(JpaProperties::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration", HibernateJpaAutoConfiguration.class)
+        .instanceSupplier(HibernateJpaAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration", ConfigurationPropertiesAutoConfiguration.class)
         .instanceSupplier(ConfigurationPropertiesAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.context.LifecycleAutoConfiguration", LifecycleAutoConfiguration.class)
@@ -438,6 +594,36 @@ public class ContextBootstrapInitializer implements ApplicationContextInitialize
         .instanceSupplier(PersistenceExceptionTranslationAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("persistenceExceptionTranslationPostProcessor", PersistenceExceptionTranslationPostProcessor.class).withFactoryMethod(PersistenceExceptionTranslationAutoConfiguration.class, "persistenceExceptionTranslationPostProcessor", Environment.class)
         .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> PersistenceExceptionTranslationAutoConfiguration.persistenceExceptionTranslationPostProcessor(attributes.get(0)))).register(beanFactory);
+    org.springframework.boot.autoconfigure.jdbc.ContextBootstrapInitializer.registerDataSourceTransactionManagerAutoConfiguration_JdbcTransactionManagerConfiguration(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration", DataSourceTransactionManagerAutoConfiguration.class)
+        .instanceSupplier(DataSourceTransactionManagerAutoConfiguration::new).register(beanFactory);
+    org.springframework.boot.autoconfigure.data.jdbc.ContextBootstrapInitializer.registerJdbcRepositoriesAutoConfiguration_SpringBootJdbcConfiguration(beanFactory);
+    BeanDefinitionRegistrar.of("jdbcMappingContext", JdbcMappingContext.class).withFactoryMethod(AbstractJdbcConfiguration.class, "jdbcMappingContext", Optional.class, JdbcCustomConversions.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(AbstractJdbcConfiguration.class).jdbcMappingContext(attributes.get(0), attributes.get(1)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("jdbcConverter", JdbcConverter.class).withFactoryMethod(AbstractJdbcConfiguration.class, "jdbcConverter", JdbcMappingContext.class, NamedParameterJdbcOperations.class, RelationResolver.class, JdbcCustomConversions.class, Dialect.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(AbstractJdbcConfiguration.class).jdbcConverter(attributes.get(0), attributes.get(1), attributes.get(2), attributes.get(3), attributes.get(4)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("jdbcCustomConversions", JdbcCustomConversions.class).withFactoryMethod(AbstractJdbcConfiguration.class, "jdbcCustomConversions")
+        .instanceSupplier(() -> beanFactory.getBean(AbstractJdbcConfiguration.class).jdbcCustomConversions()).register(beanFactory);
+    BeanDefinitionRegistrar.of("jdbcAggregateTemplate", JdbcAggregateTemplate.class).withFactoryMethod(AbstractJdbcConfiguration.class, "jdbcAggregateTemplate", ApplicationContext.class, JdbcMappingContext.class, JdbcConverter.class, DataAccessStrategy.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(AbstractJdbcConfiguration.class).jdbcAggregateTemplate(attributes.get(0), attributes.get(1), attributes.get(2), attributes.get(3)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("dataAccessStrategyBean", DataAccessStrategy.class).withFactoryMethod(AbstractJdbcConfiguration.class, "dataAccessStrategyBean", NamedParameterJdbcOperations.class, JdbcConverter.class, JdbcMappingContext.class, Dialect.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(AbstractJdbcConfiguration.class).dataAccessStrategyBean(attributes.get(0), attributes.get(1), attributes.get(2), attributes.get(3)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("jdbcDialect", Dialect.class).withFactoryMethod(AbstractJdbcConfiguration.class, "jdbcDialect", NamedParameterJdbcOperations.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(AbstractJdbcConfiguration.class).jdbcDialect(attributes.get(0)))).register(beanFactory);
+    org.springframework.boot.autoconfigure.data.jdbc.ContextBootstrapInitializer.registerJdbcRepositoriesAutoConfiguration_JdbcRepositoriesConfiguration(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.data.jdbc.JdbcRepositoriesAutoConfiguration", JdbcRepositoriesAutoConfiguration.class)
+        .instanceSupplier(JdbcRepositoriesAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration", JpaRepositoriesAutoConfiguration.class)
+        .instanceSupplier(JpaRepositoriesAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("emBeanDefinitionRegistrarPostProcessor", EntityManagerBeanDefinitionRegistrarPostProcessor.class)
+        .instanceSupplier(EntityManagerBeanDefinitionRegistrarPostProcessor::new).customize((bd) -> bd.setLazyInit(true)).register(beanFactory);
+    BeanDefinitionRegistrar.of("jpaMappingContext", JpaMetamodelMappingContextFactoryBean.class)
+        .instanceSupplier(JpaMetamodelMappingContextFactoryBean::new).customize((bd) -> bd.setLazyInit(true)).register(beanFactory);
+    BeanDefinitionRegistrar.of("jpaContext", DefaultJpaContext.class).withConstructor(Set.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> new DefaultJpaContext(attributes.get(0)))).customize((bd) -> bd.setLazyInit(true)).register(beanFactory);
+    org.springframework.data.jpa.util.ContextBootstrapInitializer.registerJpaMetamodelCacheCleanup(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.data.jpa.repository.support.JpaEvaluationContextExtension", JpaEvaluationContextExtension.class).withConstructor(char.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> new JpaEvaluationContextExtension(attributes.get(0)))).customize((bd) -> bd.getConstructorArgumentValues().addIndexedArgumentValue(0, '\\')).register(beanFactory);
     org.springframework.boot.autoconfigure.http.ContextBootstrapInitializer.registerHttpMessageConvertersAutoConfiguration_StringHttpMessageConverterConfiguration(beanFactory);
     org.springframework.boot.autoconfigure.http.ContextBootstrapInitializer.registerStringHttpMessageConverterConfiguration_stringHttpMessageConverter(beanFactory);
     org.springframework.boot.autoconfigure.http.ContextBootstrapInitializer.registerJacksonHttpMessageConvertersConfiguration_MappingJackson2HttpMessageConverterConfiguration(beanFactory);
@@ -609,11 +795,70 @@ public class ContextBootstrapInitializer implements ApplicationContextInitialize
         .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> new NettyAutoConfiguration(attributes.get(0)))).register(beanFactory);
     BeanDefinitionRegistrar.of("spring.netty-org.springframework.boot.autoconfigure.netty.NettyProperties", NettyProperties.class)
         .instanceSupplier(NettyProperties::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration", ReactiveSecurityAutoConfiguration.class)
+        .instanceSupplier(ReactiveSecurityAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("spring.security-org.springframework.boot.autoconfigure.security.SecurityProperties", SecurityProperties.class)
+        .instanceSupplier(SecurityProperties::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.security.config.annotation.configuration.ObjectPostProcessorConfiguration", ObjectPostProcessorConfiguration.class)
+        .instanceSupplier(ObjectPostProcessorConfiguration::new).customize((bd) -> bd.setRole(2)).register(beanFactory);
+    BeanDefinitionRegistrar.of("objectPostProcessor", ResolvableType.forClassWithGenerics(ObjectPostProcessor.class, Object.class)).withFactoryMethod(ObjectPostProcessorConfiguration.class, "objectPostProcessor", AutowireCapableBeanFactory.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(ObjectPostProcessorConfiguration.class).objectPostProcessor(attributes.get(0)))).customize((bd) -> bd.setRole(2)).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration", AuthenticationConfiguration.class)
+        .instanceSupplier((instanceContext) -> {
+          AuthenticationConfiguration bean = new AuthenticationConfiguration();
+          instanceContext.method("setObjectPostProcessor", ObjectPostProcessor.class)
+              .invoke(beanFactory, (attributes) -> bean.setObjectPostProcessor(attributes.get(0)));
+          instanceContext.method("setApplicationContext", ApplicationContext.class)
+              .invoke(beanFactory, (attributes) -> bean.setApplicationContext(attributes.get(0)));
+          instanceContext.method("setGlobalAuthenticationConfigurers", List.class)
+              .resolve(beanFactory, false).ifResolved((attributes) -> bean.setGlobalAuthenticationConfigurers(attributes.get(0)));
+          return bean;
+        }).register(beanFactory);
+    BeanDefinitionRegistrar.of("authenticationManagerBuilder", AuthenticationManagerBuilder.class).withFactoryMethod(AuthenticationConfiguration.class, "authenticationManagerBuilder", ObjectPostProcessor.class, ApplicationContext.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(AuthenticationConfiguration.class).authenticationManagerBuilder(attributes.get(0), attributes.get(1)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("enableGlobalAuthenticationAutowiredConfigurer", GlobalAuthenticationConfigurerAdapter.class).withFactoryMethod(AuthenticationConfiguration.class, "enableGlobalAuthenticationAutowiredConfigurer", ApplicationContext.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> AuthenticationConfiguration.enableGlobalAuthenticationAutowiredConfigurer(attributes.get(0)))).register(beanFactory);
+    org.springframework.security.config.annotation.authentication.configuration.ContextBootstrapInitializer.registerAuthenticationConfiguration_initializeUserDetailsBeanManagerConfigurer(beanFactory);
+    org.springframework.security.config.annotation.authentication.configuration.ContextBootstrapInitializer.registerAuthenticationConfiguration_initializeAuthenticationProviderBeanManagerConfigurer(beanFactory);
+    org.springframework.security.config.annotation.web.configuration.ContextBootstrapInitializer.registerWebSecurityConfiguration(beanFactory);
+    BeanDefinitionRegistrar.of("delegatingApplicationListener", DelegatingApplicationListener.class).withFactoryMethod(WebSecurityConfiguration.class, "delegatingApplicationListener")
+        .instanceSupplier(() -> WebSecurityConfiguration.delegatingApplicationListener()).register(beanFactory);
+    BeanDefinitionRegistrar.of("webSecurityExpressionHandler", ResolvableType.forClassWithGenerics(SecurityExpressionHandler.class, FilterInvocation.class)).withFactoryMethod(WebSecurityConfiguration.class, "webSecurityExpressionHandler")
+        .instanceSupplier(() -> beanFactory.getBean(WebSecurityConfiguration.class).webSecurityExpressionHandler()).customize((bd) -> bd.setDependsOn(new String[] { "springSecurityFilterChain" })).register(beanFactory);
+    BeanDefinitionRegistrar.of("springSecurityFilterChain", Filter.class).withFactoryMethod(WebSecurityConfiguration.class, "springSecurityFilterChain")
+        .instanceSupplier(() -> beanFactory.getBean(WebSecurityConfiguration.class).springSecurityFilterChain()).register(beanFactory);
+    BeanDefinitionRegistrar.of("privilegeEvaluator", WebInvocationPrivilegeEvaluator.class).withFactoryMethod(WebSecurityConfiguration.class, "privilegeEvaluator")
+        .instanceSupplier(() -> beanFactory.getBean(WebSecurityConfiguration.class).privilegeEvaluator()).customize((bd) -> bd.setDependsOn(new String[] { "springSecurityFilterChain" })).register(beanFactory);
+    BeanDefinitionRegistrar.of("conversionServicePostProcessor", BeanFactoryPostProcessor.class).withFactoryMethod(WebSecurityConfiguration.class, "conversionServicePostProcessor")
+        .instanceSupplier(() -> WebSecurityConfiguration.conversionServicePostProcessor()).register(beanFactory);
+    org.springframework.security.config.annotation.web.configuration.ContextBootstrapInitializer.registerWebMvcSecurityConfiguration(beanFactory);
+    org.springframework.security.config.annotation.web.configuration.ContextBootstrapInitializer.registerWebMvcSecurityConfiguration_requestDataValueProcessor(beanFactory);
+    org.springframework.security.config.annotation.web.configuration.ContextBootstrapInitializer.registerHttpSecurityConfiguration(beanFactory);
+    org.springframework.security.config.annotation.web.configuration.ContextBootstrapInitializer.registerHttpSecurityConfiguration_httpSecurity(beanFactory);
+    org.springframework.boot.autoconfigure.security.servlet.ContextBootstrapInitializer.registerSpringBootWebSecurityConfiguration_WebSecurityEnablerConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.security.servlet.ContextBootstrapInitializer.registerSpringBootWebSecurityConfiguration_ErrorPageSecurityFilterConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.security.servlet.ContextBootstrapInitializer.registerErrorPageSecurityFilterConfiguration_errorPageSecurityFilter(beanFactory);
+    org.springframework.boot.autoconfigure.security.servlet.ContextBootstrapInitializer.registerSpringBootWebSecurityConfiguration_SecurityFilterChainConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.security.servlet.ContextBootstrapInitializer.registerSecurityFilterChainConfiguration_defaultSecurityFilterChain(beanFactory);
+    org.springframework.boot.autoconfigure.security.servlet.ContextBootstrapInitializer.registerSpringBootWebSecurityConfiguration(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration", SecurityAutoConfiguration.class)
+        .instanceSupplier(SecurityAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("authenticationEventPublisher", DefaultAuthenticationEventPublisher.class).withFactoryMethod(SecurityAutoConfiguration.class, "authenticationEventPublisher", ApplicationEventPublisher.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(SecurityAutoConfiguration.class).authenticationEventPublisher(attributes.get(0)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration", SecurityFilterAutoConfiguration.class)
+        .instanceSupplier(SecurityFilterAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("securityFilterChainRegistration", DelegatingFilterProxyRegistrationBean.class).withFactoryMethod(SecurityFilterAutoConfiguration.class, "securityFilterChainRegistration", SecurityProperties.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(SecurityFilterAutoConfiguration.class).securityFilterChainRegistration(attributes.get(0)))).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration", UserDetailsServiceAutoConfiguration.class)
+        .instanceSupplier(UserDetailsServiceAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("inMemoryUserDetailsManager", InMemoryUserDetailsManager.class).withFactoryMethod(UserDetailsServiceAutoConfiguration.class, "inMemoryUserDetailsManager", SecurityProperties.class, ObjectProvider.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(UserDetailsServiceAutoConfiguration.class).inMemoryUserDetailsManager(attributes.get(0), attributes.get(1)))).customize((bd) -> bd.setLazyInit(true)).register(beanFactory);
+    org.springframework.boot.autoconfigure.sql.init.ContextBootstrapInitializer.registerDataSourceInitializationConfiguration(beanFactory);
+    org.springframework.boot.autoconfigure.sql.init.ContextBootstrapInitializer.registerDataSourceInitializationConfiguration_dataSourceScriptDatabaseInitializer(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration", SqlInitializationAutoConfiguration.class)
         .instanceSupplier(SqlInitializationAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("spring.sql.init-org.springframework.boot.autoconfigure.sql.init.SqlInitializationProperties", SqlInitializationProperties.class)
         .instanceSupplier(SqlInitializationProperties::new).register(beanFactory);
-    org.springframework.boot.sql.init.dependency.ContextBootstrapInitializer.registerDatabaseInitializationDependencyConfigurer_DependsOnDatabaseInitializationPostProcessor(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration", TaskSchedulingAutoConfiguration.class)
         .instanceSupplier(TaskSchedulingAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("scheduledBeanLazyInitializationExcludeFilter", LazyInitializationExcludeFilter.class).withFactoryMethod(TaskSchedulingAutoConfiguration.class, "scheduledBeanLazyInitializationExcludeFilter")
@@ -635,6 +880,23 @@ public class ContextBootstrapInitializer implements ApplicationContextInitialize
         .instanceSupplier(ThymeleafAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("spring.thymeleaf-org.springframework.boot.autoconfigure.thymeleaf.ThymeleafProperties", ThymeleafProperties.class)
         .instanceSupplier(ThymeleafProperties::new).register(beanFactory);
+    org.springframework.transaction.annotation.ContextBootstrapInitializer.registerProxyTransactionManagementConfiguration(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.transaction.config.internalTransactionAdvisor", BeanFactoryTransactionAttributeSourceAdvisor.class).withFactoryMethod(ProxyTransactionManagementConfiguration.class, "transactionAdvisor", TransactionAttributeSource.class, TransactionInterceptor.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(ProxyTransactionManagementConfiguration.class).transactionAdvisor(attributes.get(0), attributes.get(1)))).customize((bd) -> bd.setRole(2)).register(beanFactory);
+    BeanDefinitionRegistrar.of("transactionAttributeSource", TransactionAttributeSource.class).withFactoryMethod(ProxyTransactionManagementConfiguration.class, "transactionAttributeSource")
+        .instanceSupplier(() -> beanFactory.getBean(ProxyTransactionManagementConfiguration.class).transactionAttributeSource()).customize((bd) -> bd.setRole(2)).register(beanFactory);
+    BeanDefinitionRegistrar.of("transactionInterceptor", TransactionInterceptor.class).withFactoryMethod(ProxyTransactionManagementConfiguration.class, "transactionInterceptor", TransactionAttributeSource.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(ProxyTransactionManagementConfiguration.class).transactionInterceptor(attributes.get(0)))).customize((bd) -> bd.setRole(2)).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.transaction.config.internalTransactionalEventListenerFactory", TransactionalEventListenerFactory.class).withFactoryMethod(AbstractTransactionManagementConfiguration.class, "transactionalEventListenerFactory")
+        .instanceSupplier(() -> AbstractTransactionManagementConfiguration.transactionalEventListenerFactory()).customize((bd) -> bd.setRole(2)).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration$EnableTransactionManagementConfiguration$JdkDynamicAutoProxyConfiguration", TransactionAutoConfiguration.EnableTransactionManagementConfiguration.JdkDynamicAutoProxyConfiguration.class)
+        .instanceSupplier(TransactionAutoConfiguration.EnableTransactionManagementConfiguration.JdkDynamicAutoProxyConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration$EnableTransactionManagementConfiguration", TransactionAutoConfiguration.EnableTransactionManagementConfiguration.class)
+        .instanceSupplier(TransactionAutoConfiguration.EnableTransactionManagementConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration$TransactionTemplateConfiguration", TransactionAutoConfiguration.TransactionTemplateConfiguration.class)
+        .instanceSupplier(TransactionAutoConfiguration.TransactionTemplateConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("transactionTemplate", TransactionTemplate.class).withFactoryMethod(TransactionAutoConfiguration.TransactionTemplateConfiguration.class, "transactionTemplate", PlatformTransactionManager.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(TransactionAutoConfiguration.TransactionTemplateConfiguration.class).transactionTemplate(attributes.get(0)))).register(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration", TransactionAutoConfiguration.class)
         .instanceSupplier(TransactionAutoConfiguration::new).register(beanFactory);
     BeanDefinitionRegistrar.of("platformTransactionManagerCustomizers", TransactionManagerCustomizers.class).withFactoryMethod(TransactionAutoConfiguration.class, "platformTransactionManagerCustomizers", ObjectProvider.class)
@@ -715,5 +977,11 @@ public class ContextBootstrapInitializer implements ApplicationContextInitialize
         .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> beanFactory.getBean(WebServiceTemplateAutoConfiguration.class).webServiceTemplateBuilder(attributes.get(0)))).register(beanFactory);
     BeanDefinitionRegistrar.of("org.springframework.boot.autoconfigure.websocket.servlet.WebSocketMessagingAutoConfiguration", WebSocketMessagingAutoConfiguration.class)
         .instanceSupplier(WebSocketMessagingAutoConfiguration::new).register(beanFactory);
+    BeanDefinitionRegistrar.of("org.springframework.orm.jpa.SharedEntityManagerCreator#0", EntityManager.class).withFactoryMethod(SharedEntityManagerCreator.class, "createSharedEntityManager", EntityManagerFactory.class)
+        .instanceSupplier((instanceContext) -> instanceContext.create(beanFactory, (attributes) -> SharedEntityManagerCreator.createSharedEntityManager(attributes.get(0)))).customize((bd) -> {
+      bd.setPrimary(true);
+      bd.setLazyInit(true);
+      bd.getConstructorArgumentValues().addIndexedArgumentValue(0, new RuntimeBeanReference("entityManagerFactory"));
+    }).register(beanFactory);
   }
 }
